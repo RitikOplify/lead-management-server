@@ -15,6 +15,7 @@ const {
   login,
   approveDealer,
   currentAdmin,
+  refreshToken,
 } = require("../controllers/adminController");
 
 const { isAuthenticated, isAdmin } = require("../middlewares/auth");
@@ -65,9 +66,17 @@ router.get(
 
 // Product Routes
 router.post("/product", isAuthenticated, isAdmin, createProduct);
+router.get("/refresh-token", refreshToken);
+
 router.get("/products", isAuthenticated, isAdmin, getAllProducts);
 router.get("/logout", (req, res) => {
   res.clearCookie("accessToken", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+  });
+
+  res.clearCookie("refreshToken", {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

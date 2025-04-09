@@ -1,5 +1,6 @@
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcrypt");
+var jwt = require("jsonwebtoken");
 
 const { catchAsyncErrors } = require("../middlewares/catchAsyncErrors");
 const ErrorHandler = require("../utils/errorHandler");
@@ -74,7 +75,7 @@ exports.login = catchAsyncErrors(async (req, res, next) => {
     role: company.role,
   });
 
-  res.cookie("accessToken", accessToken, accessTokenCookieOptions);
+  // res.cookie("accessToken", accessToken, accessTokenCookieOptions);
 
   res.status(200).json({
     success: true,
@@ -84,7 +85,53 @@ exports.login = catchAsyncErrors(async (req, res, next) => {
       name: company.name,
       email: company.email,
     },
+    accessToken,
     refreshToken,
+  });
+});
+
+exports.refreshToken = catchAsyncErrors(async (req, res, next) => {
+  const { refreshToken } = req.cookies;
+
+  if (!refreshToken) {
+    return next(new ErrorHandler("Session expired. Please log in again.", 401));
+  }
+
+  const { id } = jwt.verify(refreshToken, process.env.JWT_SECRET);
+  if (!id) {
+    return next(
+      new ErrorHandler("Invalid refresh token. Please log in again.", 403)
+    );
+  }
+
+  const validUser = await prisma.company.findUnique({
+    where: { id },
+  });
+
+  if (!validUser) {
+    res.clearCookie("accessToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
+    return next(new ErrorHandler("User not found. Please log in again.", 404));
+  }
+
+  const { accessToken, refreshToken: newRefreshToken } =
+    generateTokens(validUser);
+
+  console.log("New Refresh Token:", newRefreshToken);
+
+  res.status(200).json({
+    success: true,
+    accessToken,
+    refreshToken: newRefreshToken,
+    message: "Session refreshed successfully.",
   });
 });
 
@@ -116,7 +163,7 @@ exports.approveDealer = catchAsyncErrors(async (req, res, next) => {
 // Create Sales Executive (Admin)
 exports.createSalesExecutive = catchAsyncErrors(async (req, res, next) => {
   const { username, email, password } = req.body;
-  companyId = req.id;
+  companyId = req.user.id;
 
   const parsed = createSalesExecutiveSchema.safeParse({
     username,
@@ -124,6 +171,7 @@ exports.createSalesExecutive = catchAsyncErrors(async (req, res, next) => {
     password,
     companyId,
   });
+
   if (!parsed.success) {
     return next(new ErrorHandler(parsed.error.errors[0].message, 400));
   }
