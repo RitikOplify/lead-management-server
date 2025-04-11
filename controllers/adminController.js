@@ -19,7 +19,6 @@ const {
 } = require("../utils/cookieOptions");
 const prisma = new PrismaClient();
 
-// Register company (Admin)
 exports.registerCompany = catchAsyncErrors(async (req, res, next) => {
   const { name, email, password } = req.body;
   const parsed = companyRegisterSchema.safeParse({ name, email, password });
@@ -42,6 +41,7 @@ exports.registerCompany = catchAsyncErrors(async (req, res, next) => {
     name: company.name,
     id: company.id,
     role: company.role,
+    companyId: company.id,
   });
   res.cookie("accessToken", accessToken, accessTokenCookieOptions);
   res.cookie("refreshToken", refreshToken, refreshTokenCookieOptions);
@@ -73,9 +73,9 @@ exports.login = catchAsyncErrors(async (req, res, next) => {
     name: company.name,
     id: company.id,
     role: company.role,
+    companyId: company.id,
   });
-
-  // res.cookie("accessToken", accessToken, accessTokenCookieOptions);
+  res.cookie("accessToken", accessToken, accessTokenCookieOptions);
 
   res.status(200).json({
     success: true,
@@ -122,8 +122,12 @@ exports.refreshToken = catchAsyncErrors(async (req, res, next) => {
     return next(new ErrorHandler("User not found. Please log in again.", 404));
   }
 
-  const { accessToken, refreshToken: newRefreshToken } =
-    generateTokens(validUser);
+  const { accessToken, refreshToken: newRefreshToken } = generateTokens({
+    name: validUser.name,
+    id: validUser.id,
+    role: validUser.role,
+    companyId: validUser.id,
+  });
 
   console.log("New Refresh Token:", newRefreshToken);
 
@@ -160,7 +164,6 @@ exports.approveDealer = catchAsyncErrors(async (req, res, next) => {
   res.status(200).json({ message: "Dealer approved successfully", dealer });
 });
 
-// Create Sales Executive (Admin)
 exports.createSalesExecutive = catchAsyncErrors(async (req, res, next) => {
   const { username, email, password } = req.body;
   companyId = req.user.id;
@@ -194,13 +197,11 @@ exports.createSalesExecutive = catchAsyncErrors(async (req, res, next) => {
     .json({ message: "Sales Executive created successfully", executive });
 });
 
-// View all leads (Admin)
 exports.viewAllLeads = catchAsyncErrors(async (req, res, next) => {
   const leads = await prisma.lead.findMany();
   res.status(200).json({ leads });
 });
 
-// View all dealers for Admin
 exports.viewAllDealers = catchAsyncErrors(async (req, res, next) => {
   const dealers = await prisma.dealer.findMany({
     where: { companyId: req.user.companyId },
@@ -208,7 +209,6 @@ exports.viewAllDealers = catchAsyncErrors(async (req, res, next) => {
   res.status(200).json({ dealers });
 });
 
-// View all sales executives for Admin
 exports.viewAllSalesExecutives = catchAsyncErrors(async (req, res, next) => {
   const executives = await prisma.executive.findMany({
     where: { companyId: req.user.companyId },
@@ -216,9 +216,9 @@ exports.viewAllSalesExecutives = catchAsyncErrors(async (req, res, next) => {
   res.status(200).json({ executives });
 });
 
-// Create a Category
 exports.createCategory = catchAsyncErrors(async (req, res, next) => {
   const { name } = req.body;
+  companyId = req.user.companyId;
 
   const parsed = createCategorySchema.safeParse({ name });
   if (!parsed.success) {
@@ -226,16 +226,14 @@ exports.createCategory = catchAsyncErrors(async (req, res, next) => {
   }
 
   const category = await prisma.category.create({
-    data: { name },
+    data: { name, companyId },
   });
 
   res.status(201).json({ message: "Category created successfully", category });
 });
 
-// Create a Subcategory
 exports.createSubcategory = catchAsyncErrors(async (req, res, next) => {
   const { name, categoryId } = req.body;
-
   const parsed = createSubcategorySchema.safeParse({ name, categoryId });
   if (!parsed.success) {
     return next(new ErrorHandler(parsed.error.errors[0].message, 400));
@@ -258,10 +256,9 @@ exports.createSubcategory = catchAsyncErrors(async (req, res, next) => {
     .json({ message: "Subcategory created successfully", subcategory });
 });
 
-// Create a Product (can belong to Category or Subcategory)
 exports.createProduct = catchAsyncErrors(async (req, res, next) => {
-  const { name, companyId, categoryId, subcategoryId } = req.body;
-
+  const { name, categoryId, subcategoryId } = req.body;
+  const companyId = req.user.companyId;
   const parsed = createProductSchema.safeParse({
     name,
     companyId,
@@ -272,32 +269,22 @@ exports.createProduct = catchAsyncErrors(async (req, res, next) => {
     return next(new ErrorHandler(parsed.error.errors[0].message, 400));
   }
 
-  if (categoryId && subcategoryId) {
-    return next(
-      new ErrorHandler(
-        "A product can only belong to either a Category or a Subcategory, not both.",
-        400
-      )
-    );
-  }
-
   if (categoryId) {
     const categoryExists = await prisma.category.findUnique({
       where: { id: categoryId },
+      include: { subcategories: true },
     });
 
     if (!categoryExists) {
       return next(new ErrorHandler("Category does not exist", 404));
     }
-  }
 
-  if (subcategoryId) {
-    const subcategoryExists = await prisma.subcategory.findUnique({
-      where: { id: subcategoryId },
-    });
-
-    if (!subcategoryExists) {
-      return next(new ErrorHandler("Subcategory does not exist", 404));
+    if (subcategoryId) {
+      const subcategoryExists =
+        categoryExists.subcategories.includes(subcategoryId);
+      if (!subcategoryExists) {
+        return next(new ErrorHandler("Subcategory does not exist", 404));
+      }
     }
   }
 
@@ -308,7 +295,6 @@ exports.createProduct = catchAsyncErrors(async (req, res, next) => {
   res.status(201).json({ message: "Product created successfully", product });
 });
 
-// Get all Categories
 exports.getAllCategories = catchAsyncErrors(async (req, res, next) => {
   const categories = await prisma.category.findMany({
     include: { subcategories: true, products: true },
@@ -316,7 +302,6 @@ exports.getAllCategories = catchAsyncErrors(async (req, res, next) => {
   res.status(200).json({ categories });
 });
 
-// Get all Subcategories under a Category
 exports.getSubcategoriesByCategory = catchAsyncErrors(
   async (req, res, next) => {
     const { categoryId } = req.params;
@@ -329,7 +314,6 @@ exports.getSubcategoriesByCategory = catchAsyncErrors(
   }
 );
 
-// Get all Products
 exports.getAllProducts = catchAsyncErrors(async (req, res, next) => {
   const products = await prisma.product.findMany({
     include: { category: true, subcategory: true, company: true },

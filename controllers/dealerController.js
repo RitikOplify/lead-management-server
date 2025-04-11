@@ -53,12 +53,10 @@ exports.createDealer = catchAsyncErrors(async (req, res, next) => {
     },
   });
 
-  res
-    .status(201)
-    .json({
-      message: "Thank You For Registration w'll get back to you soon",
-      dealer,
-    });
+  res.status(201).json({
+    message: "Thank You For Registration w'll get back to you soon",
+    dealer,
+  });
 });
 
 exports.dealerLogin = catchAsyncErrors(async (req, res, next) => {
@@ -77,7 +75,9 @@ exports.dealerLogin = catchAsyncErrors(async (req, res, next) => {
   }
 
   if (dealer.status !== "ACTIVE") {
-    return next(new ErrorHandler("Your account is not approved yet", 401));
+    return next(
+      new ErrorHandler(`Your account is not approved yet, ${dealer.id}`, 401)
+    );
   }
   const isMatch = await bcrypt.compare(password, dealer.password);
   if (!isMatch) {
@@ -88,7 +88,8 @@ exports.dealerLogin = catchAsyncErrors(async (req, res, next) => {
 
   res.cookie("accessToken", accessToken, accessTokenCookieOptions);
   res.cookie("refreshToken", refreshToken, refreshTokenCookieOptions);
-  res
-    .status(200)
-    .json({ success: true, message: "Login successful! Welcome back." });
+  res.status(200).json({
+    success: true,
+    message: "Login successful! Welcome back.",
+  });
 });

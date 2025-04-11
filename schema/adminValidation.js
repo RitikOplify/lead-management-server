@@ -45,7 +45,7 @@ exports.createLeadSchema = z.object({
 
 // Category Validation
 exports.createCategorySchema = z.object({
-  name: z.string().min(3, "Category name is required"),
+  name: z.string().min(2, "Category name is required"),
 });
 
 // Subcategory Validation

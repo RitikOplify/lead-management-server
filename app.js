@@ -2,12 +2,13 @@ const express = require("express");
 const logger = require("morgan");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
-const session = require("express-session");
 
 const dotenv = require("dotenv");
 const ErrorHandler = require("./utils/errorHandler");
 const admin = require("./routes/adminRoute");
 const dealer = require("./routes/dealersRoutes");
+const lead = require("./routes/leadRoute");
+
 const { generatedErrors } = require("./middlewares/errors");
 
 dotenv.config({ path: "./.env" });
@@ -24,15 +25,9 @@ app.use(
 );
 app.use(express.urlencoded({ extended: false }));
 
-app.use(
-  session({
-    resave: true,
-    saveUninitialized: true,
-    secret: process.env.EXPRESS_SESSION_SECRET,
-  })
-);
-
 app.use("/admin", admin);
+app.use("/lead", lead);
+
 app.use("/dealer", dealer);
 
 app.get("/", (req, res) => {

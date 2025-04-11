@@ -100,7 +100,7 @@ model Dealer {
   password  String
   status DealerStatus @default(INACTIVE)
   @@index([companyId])
-  company   Company  @relation(fields: [companyId], references: [id])
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   leads     Lead[]
   createdAt DateTime @default(now())
 }
@@ -110,11 +110,12 @@ model Lead {
   name         String
   email        String      @unique
   contact      String
+  companyName  String?
+
   status       LeadStatus
   stage        LeadStage
   source       String
   companyId    String
-
   @@index([companyId])
   @@index([productId])
   company      Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -140,8 +141,8 @@ model FollowUp {
   leadId    String   
   @@index([leadId])
   lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  status    String
-  stage     String
+  status    LeadStatus
+  stage     LeadStage
   date      DateTime
   time      String
   message   String
